@@ -41,8 +41,6 @@ class SaveToDatasets(tk.Toplevel):
         if self.entry == "":
             no_name = "Please insert a name before saving"
             messagebox.showerror(title='Load error', message=no_name)
-            # exit if statement
-
         # check if dataset is loaded as variable before saving
         elif self.maingui.main_df is None:
             no_dataset = "No dataset loaded to save"

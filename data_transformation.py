@@ -39,13 +39,21 @@ class DataTransformation(tk.Toplevel):
         self.filter_popupmenu2.grid(row=3, column=1, columnspan=3, sticky='NSEW')
         filter_button.grid(row=3, column=6, columnspan=1, sticky='NSEW')
 
-        # remove duplicates
-        remove_dups_label = tk.Label(self, text='Remove Duplicates')
-        remove_dups_button = ttk.Button(self, text='Apply',
-                                        command=self.drop_duplicates)
-        remove_dups_label.grid(row=7, column=1, columnspan=3,
+        # Remove Nan values
+        remove_nan_label = tk.Label(self, text='Remove NaN rows')
+
+        self.nan_var1 = tk.StringVar()
+        self.nan_var1.set(self.cols[0])
+        self.nan_popupmenu1 = ttk.OptionMenu(self, self.nan_var1,
+                                                self.cols[0], *self.cols)
+        self.nan_popupmenu1.config(width=30)
+
+        remove_nan_button = ttk.Button(self, text='Apply',
+                                        command=self.remove_nans)
+        remove_nan_label.grid(row=7, column=1, columnspan=3,
                                pady=(20, 0), sticky='NSEW')
-        remove_dups_button.grid(row=8, column=1, columnspan=3, sticky='NSEW')
+        self.nan_popupmenu1.grid(row=8, column=1, columnspan=3, sticky='NSEW')
+        remove_nan_button.grid(row=8, column=6, columnspan=1, sticky='NSEW')
 
         # remove content and extract to new column
         remove_extract_label = tk.Label(self, text='Extract Seating from '
@@ -122,6 +130,15 @@ class DataTransformation(tk.Toplevel):
             messagebox.showerror(title='Out of Bounds',
                                 message='No columns are left to remove')
 
+    def remove_nans(self):
+        # Remove rows with NaN values
+        column = self.nan_var1.get()
+        if self.maingui.main_df[column].isnull().values.any():
+            self.maingui.main_df = self.maingui.main_df[self.maingui.main_df[column].notna()]
+            self.update_textbox(f'Rows with Nan values removed')
+        else:
+            self.update_textbox(f'No Nan values found')
+
     def join_tables(self):
         try:
             # load table from JSON directory
@@ -139,22 +156,15 @@ class DataTransformation(tk.Toplevel):
                                 f'on {col} using {how} join')
         except KeyError as e:
             col_not_common = 'Selected column does not exist in joining table'
-            messagebox.showerror(title=f'{e} Column does not exist', message=col_not_common)
+            messagebox.showerror(title=e, message=col_not_common)
         except ValueError:
             value_error = 'Chosen file is not JSON'
             messagebox.showerror(title=f'Chosen file is not JSON', message=value_error)
 
-    def drop_duplicates(self):
-        size_before = self.maingui.main_df.size
-        self.maingui.main_df = self.maingui.main_df.drop_duplicates()
-        size_after = self.maingui.main_df.size
-        if size_before == size_after:
-            self.update_textbox('No duplicates were found')
-        if size_before > size_after:
-            diff = size_before - size_after
-            self.update_textbox(f'{diff} duplicate rows dropped')
-
     def extract_seating(self):
+        """
+        Extract seating from PE Description column and append to main DF
+        """
         if 'SEATING' in self.maingui.main_df.columns:
             messagebox.showerror(title="SEATING Column Exists",
                                  message="SEATING column already exists")
@@ -179,7 +189,7 @@ class DataTransformation(tk.Toplevel):
         # extract content between parentheses otherwise return not specified
         try:
             return re.search(r'\((.*?)\)', string).group(1)
-        except AttributeError:
+        except AttributeError as e:
             return "Not Specified"
 
     def update_columns(self):
@@ -198,6 +208,9 @@ class DataTransformation(tk.Toplevel):
         self.text_box.config(state='disabled')
 
     def year_col(self):
+        '''
+        Extract year from ACTIVITY DATE column and append to main DF
+        '''
         if 'YEAR' in self.maingui.main_df.columns:
             messagebox.showerror(title="YEAR Column Exists",
                                  message="YEAR column already exists")
@@ -208,5 +221,4 @@ class DataTransformation(tk.Toplevel):
             self.update_columns()
             self.update_textbox('YEAR column added')
         except KeyError as e:
-            messagebox.showerror(title=f'No {e} Column',
-                                 message=f'No {e} column found')
+            messagebox.showerror(title=e, message=e)

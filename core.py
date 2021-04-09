@@ -3,13 +3,10 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import numpy as np
-import re
 import os
 import pandas as pd
-from dateutil.parser import parse
 
 from scipy import stats
-from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 
@@ -48,9 +45,9 @@ class MainGUI:
         self.text_box.config(state='disabled')
 
         # snap all elements to grid
-        load_csv_button.grid(row=0, column=1, sticky='NSEW')
-        load_db_button.grid(row=1, column=1, sticky='NSEW')
-        save_db_button.grid(row=2, column=1, sticky='NSEW')
+        load_csv_button.grid(row=0, column=1, padx=(0, 20), sticky='NSEW')
+        load_db_button.grid(row=1, column=1, padx=(0, 20), sticky='NSEW')
+        save_db_button.grid(row=2, column=1, padx=(0, 20), sticky='NSEW')
         data_transform_button.grid(row=0, column=2, sticky='NSEW')
         data_analysis_button.grid(row=1, column=2, sticky='NSEW')
         preview_df_button.grid(row=2, column=2, sticky='NSEW')
@@ -136,10 +133,12 @@ class DataAnalysis(tk.Toplevel):
     def get_stats(self):
         # get mode, median, mean of selected columns
         for_each = {'for vendor seating': 'SEATING',
-                   'for each zip code': 'Zip Codes'}
+                    'for each zip code': 'Zip Codes'}
+        # get selected index
         for_each_selected = for_each[self.statistics_tkvar1.get()]
         mode = lambda x: stats.mode(x)[0][0]
         stats_dict = {'mean': np.mean, 'mode': mode, 'median': np.median}
+        # extract selected statistics function
         stats_selected = stats_dict[self.statistics_tkvar2.get()]
 
         try:
@@ -152,7 +151,12 @@ class DataAnalysis(tk.Toplevel):
                                 f'per year for {for_each_selected} \n'
                                 f'{result}')
         except KeyError as e:
-            messagebox.showerror(title='Key error', message=f'No {e} column found')
+            # show error message if required column is missing
+            messagebox.showerror(title='Key error', message=f'{e} column is missing')
+            return
+        except pd.core.base.DataError as e:
+            # show error message if aggregated on non-numeric column
+            messagebox.showerror(title='Numeric error', message=e)
             return
 
     def get_violations(self):
@@ -161,9 +165,9 @@ class DataAnalysis(tk.Toplevel):
             # get number of unique facilities that committed each violation
             violations = self.maingui.main_df.groupby('VIOLATION DESCRIPTION')['FACILITY NAME'].nunique()
         except KeyError as e:
-            messagebox.showerror(title='Key error', message=f'No {e} column found')
+            messagebox.showerror(title='Key error', message=e)
             return
-        # plot the number of facilities that commited each violation
+        # plot the number of facilities that committed each violation
         fig = plt.figure(figsize=(40, 10))
         x = np.arange(len(violations.index))
         plt.xticks(x, violations.index, rotation='vertical')
@@ -175,33 +179,46 @@ class DataAnalysis(tk.Toplevel):
         plt.show()
 
     def violations_zip(self):
+        # get the number of violations committed per vendor in zip code area
         try:
             inspections = self.maingui.main_df
             # bin zips into groups of 100
-            inspections['Zip Bin'] = np.floor(inspections['Zip Codes'] / 100) * 100
+            inspections['Zip Bin'] = np.floor(inspections['Zip Codes']/1000).astype(int)
             zip_mean_violations = inspections[['FACILITY NAME', 'Zip Bin']]\
                 .value_counts().groupby('Zip Bin').mean()
             fig, ax = plt.subplots(figsize=(30, 5))
             # create table index and plot on x-axis
-            zip_index = [str(int(x))+'-'+str(int(x+99)) for x in zip_mean_violations.index]
+            zip_index = [str(int(x)).zfill(2) for x in zip_mean_violations.index]
             x = np.arange(len(zip_mean_violations.index))
             plt.xticks(x, zip_index, rotation='vertical')
             ax.bar(zip_index, zip_mean_violations.values)
 
-            # add lineplot overlay to highlight correlation
-            f2 = interp1d(x, zip_mean_violations.values, kind='cubic')
-            xnew = np.linspace(0, len(zip_index) - 1, num=len(zip_index) * 10, endpoint=True)
-
-            ax.plot(xnew, f2(xnew), '--', color='red')
+            # add mean line
+            y_mean = [zip_mean_violations.mean()] * len(x)
+            mean_line = ax.plot(x, y_mean, label='Mean', linestyle='--', color='red')
             plt.xlabel('Zip Codes Range')
             plt.ylabel('Average number of violations per facility')
             plt.title('Number of Violations Per Facility in Zip Code')
+            plt.legend(handles=mean_line)
             fig.subplots_adjust(bottom=0.256)
             plt.show()
+
+            # get linear coefficients and display
+            corr = np.corrcoef(zip_mean_violations.index,
+                               zip_mean_violations.values)[0][1]
+            self.update_textbox(f'The correlation between Zip Code and '
+                                f'number of violations is {corr}')
+
+
             del inspections
+
         except KeyError as e:
-            messagebox.showerror(title='Key error', message=f'No {e} column found')
+            messagebox.showerror(title='Key error', message=e)
             return
+        except ValueError as e:
+            messagebox.showerror(title='Null Values Detected',
+                                 message='Null Values detected,'
+                                         ' remove before analysis')
 
     def update_textbox(self, message):
         self.text_box.config(state='normal')

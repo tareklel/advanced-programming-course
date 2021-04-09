@@ -2,3 +2,7 @@ __pycache__
 env
 *.csv
 *.json
+datasets
+csvs
+ReportTemplate.pdf
+
